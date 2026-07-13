@@ -5,9 +5,16 @@ on:
       - main
 jobs:
   test:
-    name: Functional Test
+    name: Functional Test on ${{ matrix.browser }}
     permissions: write-all
     runs-on: ubuntu-latest
+    
+    # --- STRATEGI MATRIX UNTUK PARALLEL TESTING ---
+    strategy:
+      matrix:
+        browser: [firefox, chrome, edge]
+    # ----------------------------------------------
+
     steps:
       - name: Checkout the repo
         uses: actions/checkout@v4
@@ -29,8 +36,10 @@ jobs:
       - name: Check AUT Url
         run: curl ${{ env.URL }}
 
+      # Mengaktifkan container standalone sesuai browser pada matrix
       - name: Selenium Preparation
-        run: docker run --network=isolated -d -p 4444:4444 -p 7900:7900 -v /dev/shm:/dev/shm --name firefox-standalone selenium/standalone-firefox:latest
+        run: |
+          docker run --network=isolated -d -p 4444:4444 -p 7900:7900 -v /dev/shm:/dev/shm --name selenium-standalone selenium/standalone-${{ matrix.browser }}:latest
 
       - name: Wait for Selenium Hub
         run: sh wait.sh
@@ -41,16 +50,18 @@ jobs:
       - name: Install Selenium client
         run: pip install -U selenium
 
+      # Mengirimkan tipe browser ke skrip Python
       - name: Run test
+        env:
+          BROWSER_TYPE: ${{ matrix.browser }}
         run: python tests/hello_aut.py ${{ env.URL }}
 
-      # --- TAMBAHAN LANGKAH 5 DI BAWAH INI ---
+      # Mengunggah bukti screenshot unik dari masing-masing browser
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: screenshot
-          path: tests/screenshot.png
-      # --------------------------------------
+          name: screenshot-${{ matrix.browser }}
+          path: tests/screenshot_${{ matrix.browser }}.png
 
       - name: stop docker
         run: docker stop docker-apache
